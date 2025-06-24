@@ -1,15 +1,46 @@
-const express = require("express");
-const path = require("path");
-const app = express();
-const PORT = process.env.PORT || 3000;
+const auth = firebase.auth();
 
-// Servir archivos estáticos como index.html, CSS, JS, imágenes, etc.
-app.use(express.static(__dirname));
+// Login con Email y Password
+function loginEmailPassword(email, password) {
+  auth.signInWithEmailAndPassword(email, password)
+    .then(userCredential => {
+      console.log("Usuario logueado:", userCredential.user);
+      // Aquí puedes mostrar el panel o guardar estado
+    })
+    .catch(error => {
+      alert("Error al ingresar: " + error.message);
+    });
+}
 
-app.get("/", (req, res) => {
-  res.sendFile(path.join(__dirname, "index.html"));
-});
+// Registro con Email y Password
+function registerEmailPassword(email, password) {
+  auth.createUserWithEmailAndPassword(email, password)
+    .then(userCredential => {
+      console.log("Usuario registrado:", userCredential.user);
+    })
+    .catch(error => {
+      alert("Error al registrar: " + error.message);
+    });
+}
 
-app.listen(PORT, () => {
-  console.log(`Servidor corriendo en el puerto ${PORT}`);
+// Login con Google
+function loginGoogle() {
+  const provider = new firebase.auth.GoogleAuthProvider();
+  auth.signInWithPopup(provider)
+    .then(result => {
+      console.log("Usuario Google:", result.user);
+    })
+    .catch(error => {
+      alert("Error Google login: " + error.message);
+    });
+}
+
+// Detectar cambios en estado de autenticación
+auth.onAuthStateChanged(user => {
+  if(user) {
+    console.log("Usuario conectado:", user.email);
+    // Mostrar panel admin si es admin
+  } else {
+    console.log("No hay usuario logueado");
+  }
 });
