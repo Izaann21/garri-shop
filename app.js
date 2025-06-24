@@ -44,3 +44,11 @@ auth.onAuthStateChanged(user => {
     console.log("No hay usuario logueado");
   }
 });
+if(user) {
+  db.collection("usuarios").doc(user.uid).get().then(doc => {
+    if(doc.exists && doc.data().rol === "admin") {
+      // Mostrar panel admin
+    }
+  });
+}
+
