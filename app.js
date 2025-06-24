@@ -1,66 +1,12 @@
-const admin = require('firebase-admin');
-const serviceAccount = require('./garri-shop-firebase-adminsdk-fbsvc-50611e6b00.json');
-
-admin.initializeApp({
-  credential: admin.credential.cert(serviceAccount)
-});
-
-const dbAdmin = admin.firestore();
-async function getProductos() {
-  const productosSnapshot = await dbAdmin.collection('productos').get();
-  const productos = productosSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-  return productos;
-}
-const express = require('express');
-const app = express();
-const PORT = process.env.PORT || 3000;
-fetch('/api/productos')
-  .then(res => res.json())
-  .then(productos => {
-    const container = document.getElementById('products');
-    productos.forEach(data => {
-      const div = document.createElement('div');
-      div.className = 'col-md-4';
-      div.innerHTML = `
-        <div class="card mb-4 shadow-sm">
-          <div class="card-body">
-            <h5 class="card-title">${data.nombre}</h5>
-            <p class="card-text">${data.descripcion}</p>
-            <p class="card-text"><strong>$ ${data.precio}</strong></p>
-          </div>
-        </div>`;
-      container.appendChild(div);
-    });
-  });
-
-app.get('/api/productos', async (req, res) => {
-  try {
-    const productos = await getProductos();
-    res.json(productos);
-  } catch (error) {
-    console.error(error);
-    res.status(500).json({ error: 'Error al obtener productos' });
-  }
-});
-
-app.listen(PORT, () => {
-  console.log(`Servidor corriendo en http://localhost:${PORT}`);
-});
-
-
 const express = require('express');
 const bodyParser = require('body-parser');
 const admin = require('firebase-admin');
 const nodemailer = require('nodemailer');
 const PDFDocument = require('pdfkit');
-const fs = require('fs');
 const path = require('path');
 
-const app = express();
-app.use(bodyParser.json());
-
-// Inicializa Firebase Admin con tu archivo de servicio
-const serviceAccount = require('./serviceAccountKey.json');
+// Inicializa Firebase Admin con tu archivo JSON descargado
+const serviceAccount = require('./garri-shop-firebase-adminsdk-fbsvc-50611e6b00.json');
 
 admin.initializeApp({
   credential: admin.credential.cert(serviceAccount),
@@ -68,16 +14,34 @@ admin.initializeApp({
 
 const db = admin.firestore();
 
-// Configura nodemailer (Gmail)
+const app = express();
+app.use(bodyParser.json());
+
+// Servir archivos estáticos frontend desde carpeta 'public' (crea esta carpeta y pon ahí tu HTML+JS)
+app.use(express.static(path.join(__dirname, 'public')));
+
+// Configura nodemailer (ejemplo con Gmail)
 const transporter = nodemailer.createTransport({
   service: 'gmail',
   auth: {
-    user: 'tuemail@gmail.com',            // Cambia por tu email real
-    pass: 'tu_contraseña_o_app_pw'        // Cambia por tu contraseña o app password
+    user: 'tuemail@gmail.com',           // Cambia aquí tu email real
+    pass: 'tu_contraseña_o_app_pw'       // Cambia aquí tu contraseña o app password
   }
 });
 
-// Endpoint login Firebase Admin para verificar token ID enviado desde frontend
+// API para obtener productos desde Firestore
+app.get('/api/productos', async (req, res) => {
+  try {
+    const snapshot = await db.collection('productos').get();
+    const productos = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    res.json(productos);
+  } catch (error) {
+    console.error('Error al obtener productos:', error);
+    res.status(500).json({ error: 'Error al obtener productos' });
+  }
+});
+
+// API login para verificar token ID enviado desde frontend
 app.post('/api/login', async (req, res) => {
   const { idToken } = req.body;
   try {
@@ -90,13 +54,13 @@ app.post('/api/login', async (req, res) => {
   }
 });
 
-// Endpoint para procesar compra y pago completado (frontend manda info)
+// API para procesar compra y enviar correo con PDF
 app.post('/api/compra', async (req, res) => {
   const { emailCliente, nombreCliente, productos, total } = req.body;
 
   try {
     // Guardar pedido en Firestore
-    const pedidoRef = await db.collection('pedidos').add({
+    await db.collection('pedidos').add({
       emailCliente,
       nombreCliente,
       productos,
@@ -105,32 +69,30 @@ app.post('/api/compra', async (req, res) => {
       estado: 'Pendiente'
     });
 
-    // Generar PDF factura (en memoria)
+    // Generar PDF factura en memoria
     const doc = new PDFDocument();
     let buffers = [];
     doc.on('data', buffers.push.bind(buffers));
     doc.on('end', async () => {
       const pdfData = Buffer.concat(buffers);
 
-      // Aquí podrías guardar PDF en Storage o enviarlo por email directamente
-
-      // Enviar email de confirmación
+      // Enviar email con PDF adjunto
       const mailOptions = {
         from: 'tuemail@gmail.com',
-        to: 'izangagon@gmail.com',
-        subject: `Nuevo pedido de ${nombreCliente}`,
-        text: `Pedido recibido:\nCliente: ${nombreCliente}\nEmail: ${emailCliente}\nTotal: $${total}`,
-        attachments: [
-          {
-            filename: 'factura.pdf',
-            content: pdfData
-          }
-        ]
+        to: emailCliente,   // enviamos al cliente
+        subject: `Factura de compra - ${nombreCliente}`,
+        text: `Gracias por tu compra, ${nombreCliente}. Adjuntamos tu factura.`,
+        attachments: [{
+          filename: 'factura.pdf',
+          content: pdfData
+        }]
       };
+
       await transporter.sendMail(mailOptions);
+      res.json({ mensaje: 'Compra procesada y correo enviado' });
     });
 
-    // Crear contenido PDF
+    // Contenido del PDF
     doc.fontSize(20).text('Factura de compra', { align: 'center' });
     doc.moveDown();
     doc.fontSize(14).text(`Cliente: ${nombreCliente}`);
@@ -145,16 +107,14 @@ app.post('/api/compra', async (req, res) => {
     doc.fontSize(16).text(`Total: $${total}`, { align: 'right' });
     doc.end();
 
-    res.json({ mensaje: 'Compra procesada y correo enviado' });
   } catch (error) {
     console.error('Error en compra:', error);
     res.status(500).json({ error: 'Error al procesar compra' });
   }
 });
 
-// Iniciar servidor
-const PORT = process.env.PORT || 10000;
+const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
-  console.log(`Servidor corriendo en puerto ${PORT}`);
+  console.log(`Servidor corriendo en http://localhost:${PORT}`);
 });
 
