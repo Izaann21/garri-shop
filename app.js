@@ -51,4 +51,19 @@ if(user) {
     }
   });
 }
+actions.order.capture().then(function(details) {
+  const pedido = {
+    userId: firebase.auth().currentUser.uid,
+    nombreCliente: details.payer.name.given_name,
+    emailCliente: details.payer.email_address,
+    total: details.purchase_units[0].amount.value,
+    fecha: new Date(),
+    estado: "Pendiente",
+    productos: [...], // Aquí pones los productos del carrito
+  };
+
+  db.collection("pedidos").add(pedido)
+    .then(() => alert('Gracias por tu compra, ' + details.payer.name.given_name + '!'))
+    .catch(err => alert('Error guardando pedido: ' + err));
+});
 
