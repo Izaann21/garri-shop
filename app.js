@@ -1,3 +1,53 @@
+const admin = require('firebase-admin');
+const serviceAccount = require('./garri-shop-firebase-adminsdk-fbsvc-50611e6b00.json');
+
+admin.initializeApp({
+  credential: admin.credential.cert(serviceAccount)
+});
+
+const dbAdmin = admin.firestore();
+async function getProductos() {
+  const productosSnapshot = await dbAdmin.collection('productos').get();
+  const productos = productosSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+  return productos;
+}
+const express = require('express');
+const app = express();
+const PORT = process.env.PORT || 3000;
+fetch('/api/productos')
+  .then(res => res.json())
+  .then(productos => {
+    const container = document.getElementById('products');
+    productos.forEach(data => {
+      const div = document.createElement('div');
+      div.className = 'col-md-4';
+      div.innerHTML = `
+        <div class="card mb-4 shadow-sm">
+          <div class="card-body">
+            <h5 class="card-title">${data.nombre}</h5>
+            <p class="card-text">${data.descripcion}</p>
+            <p class="card-text"><strong>$ ${data.precio}</strong></p>
+          </div>
+        </div>`;
+      container.appendChild(div);
+    });
+  });
+
+app.get('/api/productos', async (req, res) => {
+  try {
+    const productos = await getProductos();
+    res.json(productos);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'Error al obtener productos' });
+  }
+});
+
+app.listen(PORT, () => {
+  console.log(`Servidor corriendo en http://localhost:${PORT}`);
+});
+
+
 const express = require('express');
 const bodyParser = require('body-parser');
 const admin = require('firebase-admin');
