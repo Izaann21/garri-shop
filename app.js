@@ -5,6 +5,7 @@ const nodemailer = require('nodemailer');
 const PDFDocument = require('pdfkit');
 const path = require('path');
 
+// Firebase Admin SDK config
 const serviceAccount = require('./garri-shop-firebase-adminsdk-fbsvc-50611e6b00.json');
 
 admin.initializeApp({
@@ -17,16 +18,16 @@ const app = express();
 app.use(bodyParser.json());
 app.use(express.static(path.join(__dirname, 'public')));
 
-// Configura nodemailer con contraseña de aplicación de Gmail
+// Nodemailer config
 const transporter = nodemailer.createTransport({
   service: 'gmail',
   auth: {
     user: 'izangagon@gmail.com',
-    pass: 'vcvd uckn zvis keti'
+    pass: 'vcvd uckn zvis keti' // usa variable de entorno en producción
   }
 });
 
-// ENDPOINT: Obtener productos desde Firestore
+// GET productos
 app.get('/api/productos', async (req, res) => {
   try {
     const snapshot = await db.collection('productos').get();
@@ -38,7 +39,7 @@ app.get('/api/productos', async (req, res) => {
   }
 });
 
-// ENDPOINT: Procesar compra y enviar factura PDF
+// POST compra
 app.post('/api/compra', async (req, res) => {
   const { emailCliente, nombreCliente, productos, total } = req.body;
 
@@ -100,6 +101,7 @@ app.post('/api/compra', async (req, res) => {
   }
 });
 
+// Inicia el servidor
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
   console.log(`✅ Servidor corriendo en http://localhost:${PORT}`);
