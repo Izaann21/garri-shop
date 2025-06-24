@@ -1,0 +1,21 @@
+{
+  "name": "garri-shop",
+  "version": "1.0.0",
+  "description": "Tienda online GarriShop",
+  "main": "app.js",
+  "scripts": {
+    "start": "node app.js"
+  },
+  "author": "Izaann21",
+  "license": "MIT",
+  "dependencies": {
+    "express": "^4.18.2",
+    "sqlite3": "^5.1.6",
+    "body-parser": "^1.20.2"
+  }
+}
+
+
+
+
+
