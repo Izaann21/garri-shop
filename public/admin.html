@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Garri Shop - Panel Admin</title>
+  <style>
+    body { font-family: sans-serif; padding: 2rem; background: #f8f9fa; }
+    h1 { color: #333; }
+    table { width: 100%; border-collapse: collapse; margin-top: 1rem; }
+    th, td { border: 1px solid #ccc; padding: 0.5rem; text-align: left; }
+    th { background: #eee; }
+    button { margin-right: 0.5rem; padding: 0.4rem 0.8rem; cursor: pointer; }
+  </style>
+</head>
+<body>
+  <h1>🛒 Panel de Administración - Garri Shop</h1>
+  <table id="tablaPedidos">
+    <thead>
+      <tr>
+        <th>Cliente</th>
+        <th>Email</th>
+        <th>Total</th>
+        <th>Estado</th>
+        <th>Acciones</th>
+      </tr>
+    </thead>
+    <tbody></tbody>
+  </table>
+
+  <script>
+    async function cargarPedidos() {
+      const respuesta = await fetch('/api/pedidos');
+      const pedidos = await respuesta.json();
+
+      const tbody = document.querySelector('#tablaPedidos tbody');
+      tbody.innerHTML = '';
+
+      pedidos.forEach(pedido => {
+        const fila = document.createElement('tr');
+        fila.innerHTML = `
+          <td>${pedido.nombreCliente}</td>
+          <td>${pedido.emailCliente}</td>
+          <td>$${pedido.total.toFixed(2)}</td>
+          <td>${pedido.estado}</td>
+          <td>
+            <button onclick="marcarEnviado('${pedido.id}')">Marcar Enviado</button>
+            <button onclick="eliminarPedido('${pedido.id}')">Eliminar</button>
+          </td>
+        `;
+        tbody.appendChild(fila);
+      });
+    }
+
+    async function marcarEnviado(id) {
+      await fetch(`/api/pedidos/${id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ nuevoEstado: 'Enviado' })
+      });
+      cargarPedidos();
+    }
+
+    async function eliminarPedido(id) {
+      if (confirm('¿Seguro que quieres eliminar este pedido?')) {
+        await fetch(`/api/pedidos/${id}`, { method: 'DELETE' });
+        cargarPedidos();
+      }
+    }
+
+    cargarPedidos();
+  </script>
+</body>
+</html>
