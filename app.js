@@ -17,15 +17,16 @@ db.collection("productos").get().then(snapshot => {
     const data = doc.data();
     const div = document.createElement("div");
     div.className = "col-md-4";
-    div.innerHTML = \`
-      <div class="card mb-4 shadow-sm">
-        <div class="card-body">
-          <h5 class="card-title">\${data.nombre}</h5>
-          <p class="card-text">\${data.descripcion}</p>
-          <p class="card-text"><strong>\$ \${data.precio}</strong></p>
-        </div>
-      </div>
-    \`;
+   div.innerHTML = `
+  <div class="card mb-4 shadow-sm">
+    <div class="card-body">
+      <h5 class="card-title">${data.nombre}</h5>
+      <p class="card-text">${data.descripcion}</p>
+      <p class="card-text"><strong>$ ${data.precio}</strong></p>
+    </div>
+  </div>
+`;
+
     container.appendChild(div);
   });
 });
