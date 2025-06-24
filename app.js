@@ -1,71 +1,110 @@
-const auth = firebase.auth();
+const express = require('express');
+const bodyParser = require('body-parser');
+const admin = require('firebase-admin');
+const nodemailer = require('nodemailer');
+const PDFDocument = require('pdfkit');
+const fs = require('fs');
+const path = require('path');
 
-// Login con Email y Password
-function loginEmailPassword(email, password) {
-  auth.signInWithEmailAndPassword(email, password)
-    .then(userCredential => {
-      console.log("Usuario logueado:", userCredential.user);
-      // Aquí puedes mostrar el panel o guardar estado
-    })
-    .catch(error => {
-      alert("Error al ingresar: " + error.message);
-    });
-}
+const app = express();
+app.use(bodyParser.json());
 
-// Registro con Email y Password
-function registerEmailPassword(email, password) {
-  auth.createUserWithEmailAndPassword(email, password)
-    .then(userCredential => {
-      console.log("Usuario registrado:", userCredential.user);
-    })
-    .catch(error => {
-      alert("Error al registrar: " + error.message);
-    });
-}
+// Inicializa Firebase Admin con tu archivo de servicio
+const serviceAccount = require('./serviceAccountKey.json');
 
-// Login con Google
-function loginGoogle() {
-  const provider = new firebase.auth.GoogleAuthProvider();
-  auth.signInWithPopup(provider)
-    .then(result => {
-      console.log("Usuario Google:", result.user);
-    })
-    .catch(error => {
-      alert("Error Google login: " + error.message);
-    });
-}
+admin.initializeApp({
+  credential: admin.credential.cert(serviceAccount),
+});
 
-// Detectar cambios en estado de autenticación
-auth.onAuthStateChanged(user => {
-  if(user) {
-    console.log("Usuario conectado:", user.email);
-    // Mostrar panel admin si es admin
-  } else {
-    console.log("No hay usuario logueado");
+const db = admin.firestore();
+
+// Configura nodemailer (Gmail)
+const transporter = nodemailer.createTransport({
+  service: 'gmail',
+  auth: {
+    user: 'tuemail@gmail.com',            // Cambia por tu email real
+    pass: 'tu_contraseña_o_app_pw'        // Cambia por tu contraseña o app password
   }
 });
-if(user) {
-  db.collection("usuarios").doc(user.uid).get().then(doc => {
-    if(doc.exists && doc.data().rol === "admin") {
-      // Mostrar panel admin
-    }
-  });
-}
-actions.order.capture().then(function(details) {
-  const pedido = {
-    userId: firebase.auth().currentUser.uid,
-    nombreCliente: details.payer.name.given_name,
-    emailCliente: details.payer.email_address,
-    total: details.purchase_units[0].amount.value,
-    fecha: new Date(),
-    estado: "Pendiente",
-   productos: [
-  { nombre: "prueba", precio: 0.1, cantidad: 1 }
-]
-  };
 
-  db.collection("pedidos").add(pedido)
-    .then(() => alert('Gracias por tu compra, ' + details.payer.name.given_name + '!'))
-    .catch(err => alert('Error guardando pedido: ' + err));
+// Endpoint login Firebase Admin para verificar token ID enviado desde frontend
+app.post('/api/login', async (req, res) => {
+  const { idToken } = req.body;
+  try {
+    const decodedToken = await admin.auth().verifyIdToken(idToken);
+    const uid = decodedToken.uid;
+    const userRecord = await admin.auth().getUser(uid);
+    res.json({ uid, email: userRecord.email });
+  } catch (error) {
+    res.status(401).json({ error: 'Token inválido' });
+  }
+});
+
+// Endpoint para procesar compra y pago completado (frontend manda info)
+app.post('/api/compra', async (req, res) => {
+  const { emailCliente, nombreCliente, productos, total } = req.body;
+
+  try {
+    // Guardar pedido en Firestore
+    const pedidoRef = await db.collection('pedidos').add({
+      emailCliente,
+      nombreCliente,
+      productos,
+      total,
+      fecha: admin.firestore.FieldValue.serverTimestamp(),
+      estado: 'Pendiente'
+    });
+
+    // Generar PDF factura (en memoria)
+    const doc = new PDFDocument();
+    let buffers = [];
+    doc.on('data', buffers.push.bind(buffers));
+    doc.on('end', async () => {
+      const pdfData = Buffer.concat(buffers);
+
+      // Aquí podrías guardar PDF en Storage o enviarlo por email directamente
+
+      // Enviar email de confirmación
+      const mailOptions = {
+        from: 'tuemail@gmail.com',
+        to: 'izangagon@gmail.com',
+        subject: `Nuevo pedido de ${nombreCliente}`,
+        text: `Pedido recibido:\nCliente: ${nombreCliente}\nEmail: ${emailCliente}\nTotal: $${total}`,
+        attachments: [
+          {
+            filename: 'factura.pdf',
+            content: pdfData
+          }
+        ]
+      };
+      await transporter.sendMail(mailOptions);
+    });
+
+    // Crear contenido PDF
+    doc.fontSize(20).text('Factura de compra', { align: 'center' });
+    doc.moveDown();
+    doc.fontSize(14).text(`Cliente: ${nombreCliente}`);
+    doc.text(`Email: ${emailCliente}`);
+    doc.text(`Fecha: ${new Date().toLocaleString()}`);
+    doc.moveDown();
+    doc.text('Productos:');
+    productos.forEach(p => {
+      doc.text(`- ${p.nombre} x${p.cantidad} = $${p.precio * p.cantidad}`);
+    });
+    doc.moveDown();
+    doc.fontSize(16).text(`Total: $${total}`, { align: 'right' });
+    doc.end();
+
+    res.json({ mensaje: 'Compra procesada y correo enviado' });
+  } catch (error) {
+    console.error('Error en compra:', error);
+    res.status(500).json({ error: 'Error al procesar compra' });
+  }
+});
+
+// Iniciar servidor
+const PORT = process.env.PORT || 10000;
+app.listen(PORT, () => {
+  console.log(`Servidor corriendo en puerto ${PORT}`);
 });
 
