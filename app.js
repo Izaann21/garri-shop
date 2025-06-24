@@ -18,12 +18,12 @@ const app = express();
 app.use(bodyParser.json());
 app.use(express.static(path.join(__dirname, 'public')));
 
-// Configura Nodemailer (recuerda usar variables de entorno en producción)
+// Configura Nodemailer (en producción deberías usar variables de entorno para el correo)
 const transporter = nodemailer.createTransport({
   service: 'gmail',
   auth: {
     user: 'izangagon@gmail.com',
-    pass: 'vcvd uckn zvis keti' // ¡en producción esto debería ir en una variable de entorno!
+    pass: 'vcvd uckn zvis keti'
   }
 });
 
@@ -39,7 +39,7 @@ app.get('/api/productos', async (req, res) => {
   }
 });
 
-// POST compra
+// POST compra con factura y envío por correo
 app.post('/api/compra', async (req, res) => {
   const { emailCliente, nombreCliente, productos, total } = req.body;
 
@@ -98,6 +98,45 @@ app.post('/api/compra', async (req, res) => {
   } catch (error) {
     console.error('Error al procesar la compra:', error);
     res.status(500).json({ error: 'Error al procesar compra' });
+  }
+});
+
+// GET /api/pedidos - Lista todos los pedidos
+app.get('/api/pedidos', async (req, res) => {
+  try {
+    const snapshot = await db.collection('pedidos').orderBy('fecha', 'desc').get();
+    const pedidos = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    res.json(pedidos);
+  } catch (error) {
+    console.error('Error al obtener pedidos:', error);
+    res.status(500).json({ error: 'Error al obtener pedidos' });
+  }
+});
+
+// PATCH /api/pedidos/:id - Actualiza el estado del pedido
+app.patch('/api/pedidos/:id', async (req, res) => {
+  const { id } = req.params;
+  const { nuevoEstado } = req.body;
+
+  try {
+    await db.collection('pedidos').doc(id).update({ estado: nuevoEstado });
+    res.json({ mensaje: 'Estado del pedido actualizado' });
+  } catch (error) {
+    console.error('Error al actualizar estado del pedido:', error);
+    res.status(500).json({ error: 'No se pudo actualizar el estado' });
+  }
+});
+
+// DELETE /api/pedidos/:id - Elimina un pedido
+app.delete('/api/pedidos/:id', async (req, res) => {
+  const { id } = req.params;
+
+  try {
+    await db.collection('pedidos').doc(id).delete();
+    res.json({ mensaje: 'Pedido eliminado correctamente' });
+  } catch (error) {
+    console.error('Error al eliminar pedido:', error);
+    res.status(500).json({ error: 'No se pudo eliminar el pedido' });
   }
 });
 
