@@ -5,7 +5,6 @@ const nodemailer = require('nodemailer');
 const PDFDocument = require('pdfkit');
 const path = require('path');
 
-// Inicializa Firebase Admin SDK
 const serviceAccount = require('./garri-shop-firebase-adminsdk-fbsvc-50611e6b00.json');
 
 admin.initializeApp({
@@ -16,7 +15,8 @@ const db = admin.firestore();
 
 const app = express();
 app.use(bodyParser.json());
-app.use(express.static(path.join(__dirname, 'public'))); // sirve el frontend desde carpeta public
+app.use(express.static(path.join(__dirname, 'public')));
+
 
 // Configura nodemailer con contraseña de aplicación de Gmail
 const transporter = nodemailer.createTransport({
