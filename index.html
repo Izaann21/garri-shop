@@ -17,5 +17,60 @@
     <div id="paypal-button-container" class="mt-4"></div>
   </div>
   <script src="app.js"></script>
+  <!-- Scripts de Firebase y PayPal -->
+<script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-app.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-firestore.js"></script>
+<script src="https://www.paypal.com/sdk/js?client-id=TU_CLIENT_ID"></script>
+
+<script>
+  // Configura Firebase con tus datos reales
+  const firebaseConfig = {
+    apiKey: "TU_API_KEY",
+    authDomain: "TU_AUTH_DOMAIN",
+    projectId: "TU_PROJECT_ID",
+    storageBucket: "TU_STORAGE_BUCKET",
+    messagingSenderId: "TU_MESSAGING_SENDER_ID",
+    appId: "TU_APP_ID"
+  };
+  firebase.initializeApp(firebaseConfig);
+  const db = firebase.firestore();
+
+  // Mostrar productos
+  const container = document.getElementById("products");
+  db.collection("productos").get().then(snapshot => {
+    snapshot.forEach(doc => {
+      const data = doc.data();
+      const div = document.createElement("div");
+      div.className = "col-md-4";
+      div.innerHTML = `
+        <div class="card mb-4 shadow-sm">
+          <div class="card-body">
+            <h5 class="card-title">${data.nombre}</h5>
+            <p class="card-text">${data.descripcion}</p>
+            <p class="card-text"><strong>$ ${data.precio}</strong></p>
+          </div>
+        </div>
+      `;
+      container.appendChild(div);
+    });
+  });
+
+  // Botón de PayPal
+  paypal.Buttons({
+    createOrder: function(data, actions) {
+      return actions.order.create({
+        purchase_units: [{
+          amount: { value: '10.00' }
+        }]
+      });
+    },
+    onApprove: function(data, actions) {
+      return actions.order.capture().then(function(details) {
+        alert('Gracias por tu compra, ' + details.payer.name.given_name + '!');
+      });
+    }
+  }).render('#paypal-button-container');
+</script>
+
 </body>
 </html>
