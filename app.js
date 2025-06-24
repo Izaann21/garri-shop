@@ -59,7 +59,9 @@ actions.order.capture().then(function(details) {
     total: details.purchase_units[0].amount.value,
     fecha: new Date(),
     estado: "Pendiente",
-    productos: [...], // Aquí pones los productos del carrito
+   productos: [
+  { nombre: "prueba", precio: 0.1, cantidad: 1 }
+]
   };
 
   db.collection("pedidos").add(pedido)
