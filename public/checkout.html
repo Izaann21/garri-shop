@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <title>Garri Shop · Checkout</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-100 text-gray-800 flex flex-col items-center justify-center min-h-screen">
+  <div class="bg-white shadow p-8 rounded max-w-md w-full text-center">
+    <h1 class="text-2xl font-bold mb-4">💳 Confirmar compra</h1>
+    <p class="mb-6 text-sm text-gray-600">Pagarás con PayPal y recibirás confirmación automáticamente</p>
+
+    <!-- PayPal button -->
+    <div id="paypal-button-container"></div>
+
+    <div id="success-message" class="hidden mt-6 text-green-600 font-semibold">
+      ✅ ¡Pago completado! Gracias por tu compra.
+    </div>
+  </div>
+
+  <!-- PayPal SDK -->
+  <script src="https://www.paypal.com/sdk/js?client-id=AXS4C24QCG8AS&currency=EUR"></script>
+  <!-- ⚠️ Reemplaza 'sb' por tu CLIENT ID de producción para cobrar de verdad -->
+
+  <script>
+    paypal.Buttons({
+      createOrder: function(data, actions) {
+        return actions.order.create({
+          purchase_units: [{
+            amount: {
+              value: '49.99'  // 💰 Cambia esto al total real desde tu carrito
+            },
+            description: 'Pedido Garri Shop'
+          }]
+        });
+      },
+      onApprove: function(data, actions) {
+        return actions.order.capture().then(function(details) {
+          document.getElementById('success-message').classList.remove('hidden');
+          console.log('Pago completado por: ' + details.payer.name.given_name);
+          // Aquí podrías enviar los datos a tu backend (por ejemplo con fetch)
+        });
+      }
+    }).render('#paypal-button-container');
+  </script>
+</body>
+</html>
