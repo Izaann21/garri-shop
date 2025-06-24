@@ -17,13 +17,12 @@ const app = express();
 app.use(bodyParser.json());
 app.use(express.static(path.join(__dirname, 'public')));
 
-
 // Configura nodemailer con contraseña de aplicación de Gmail
 const transporter = nodemailer.createTransport({
   service: 'gmail',
   auth: {
-    user: 'izangagon@gmail.com',         // TU CORREO
-    pass: 'vcvd uckn zvis keti'      // CONTRASEÑA DE APLICACIÓN, NO TU CONTRASEÑA REAL
+    user: 'izangagon@gmail.com',
+    pass: 'vcvd uckn zvis keti'
   }
 });
 
@@ -44,7 +43,6 @@ app.post('/api/compra', async (req, res) => {
   const { emailCliente, nombreCliente, productos, total } = req.body;
 
   try {
-    // Guardar pedido en Firestore
     await db.collection('pedidos').add({
       emailCliente,
       nombreCliente,
@@ -54,7 +52,6 @@ app.post('/api/compra', async (req, res) => {
       estado: 'Pendiente'
     });
 
-    // Generar PDF factura
     const generarPDF = () => {
       return new Promise((resolve, reject) => {
         const doc = new PDFDocument();
@@ -82,7 +79,6 @@ app.post('/api/compra', async (req, res) => {
 
     const pdfData = await generarPDF();
 
-    // Enviar email con PDF
     const mailOptions = {
       from: 'izangagon@gmail.com',
       to: emailCliente,
@@ -104,10 +100,7 @@ app.post('/api/compra', async (req, res) => {
   }
 });
 
-// Puerto del servidor
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
   console.log(`✅ Servidor corriendo en http://localhost:${PORT}`);
 });
-
-
