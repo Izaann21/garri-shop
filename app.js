@@ -5,8 +5,8 @@ const nodemailer = require('nodemailer');
 const PDFDocument = require('pdfkit');
 const path = require('path');
 
-// Firebase Admin SDK config
-const serviceAccount = require('./garri-shop-firebase-adminsdk-fbsvc-50611e6b00.json');
+// Configura Firebase usando variable de entorno
+const serviceAccount = JSON.parse(process.env.FIREBASE_CREDENTIALS);
 
 admin.initializeApp({
   credential: admin.credential.cert(serviceAccount),
@@ -18,12 +18,12 @@ const app = express();
 app.use(bodyParser.json());
 app.use(express.static(path.join(__dirname, 'public')));
 
-// Nodemailer config
+// Configura Nodemailer (recuerda usar variables de entorno en producción)
 const transporter = nodemailer.createTransport({
   service: 'gmail',
   auth: {
     user: 'izangagon@gmail.com',
-    pass: 'vcvd uckn zvis keti' // usa variable de entorno en producción
+    pass: 'vcvd uckn zvis keti' // ¡en producción esto debería ir en una variable de entorno!
   }
 });
 
