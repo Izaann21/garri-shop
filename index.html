@@ -18,23 +18,59 @@
 <body class="bg-light">
   <div class="container py-4">
     <h1 class="text-center">GarriShop 🛒</h1>
+
+    <div id="auth-section" class="mb-3 text-center">
+      <button id="login-btn" class="btn btn-primary">Iniciar sesión</button>
+      <button id="logout-btn" class="btn btn-secondary d-none">Cerrar sesión</button>
+      <p id="user-info" class="mt-2"></p>
+    </div>
+
     <div id="products" class="row"></div>
+
     <div id="paypal-button-container" class="mt-4"></div>
   </div>
 
   <script>
     // Configura Firebase con tus datos reales
-   const firebaseConfig = {
-  apiKey: "AIzaSyA0_1Cq2vYHysU9d4S91M5ma_tkhlc6vkE",
-  authDomain: "garri-shop.firebaseapp.com",
-  projectId: "garri-shop",
-  storageBucket: "garri-shop.firebasestorage.app",
-  messagingSenderId: "505369502932",
-  appId: "1:505369502932:web:3974b956ed4eaca3550741",
-  measurementId: "G-DN14B0KSBH"
-};
+    const firebaseConfig = {
+      apiKey: "AIzaSyA0_1Cq2vYHysU9d4S91M5ma_tkhlc6vkE",
+      authDomain: "garri-shop.firebaseapp.com",
+      projectId: "garri-shop",
+      storageBucket: "garri-shop.firebasestorage.app",
+      messagingSenderId: "505369502932",
+      appId: "1:505369502932:web:3974b956ed4eaca3550741",
+      measurementId: "G-DN14B0KSBH"
+    };
     firebase.initializeApp(firebaseConfig);
+    const auth = firebase.auth();
     const db = firebase.firestore();
+
+    let currentUser = null;
+
+    // Login y logout básico con popup Google
+    const loginBtn = document.getElementById("login-btn");
+    const logoutBtn = document.getElementById("logout-btn");
+    const userInfo = document.getElementById("user-info");
+
+    loginBtn.onclick = () => {
+      const provider = new firebase.auth.GoogleAuthProvider();
+      auth.signInWithPopup(provider);
+    };
+    logoutBtn.onclick = () => auth.signOut();
+
+    auth.onAuthStateChanged(user => {
+      if (user) {
+        currentUser = user;
+        loginBtn.classList.add("d-none");
+        logoutBtn.classList.remove("d-none");
+        userInfo.textContent = `Hola, ${user.displayName} (${user.email})`;
+      } else {
+        currentUser = null;
+        loginBtn.classList.remove("d-none");
+        logoutBtn.classList.add("d-none");
+        userInfo.textContent = "";
+      }
+    });
 
     // Mostrar productos
     const container = document.getElementById("products");
@@ -56,22 +92,57 @@
       });
     });
 
-    // Botón de PayPal con monto fijo
+    // PayPal botón dinámico para productos (ejemplo con total fijo, se puede mejorar)
     paypal.Buttons({
       createOrder: function(data, actions) {
         return actions.order.create({
           purchase_units: [{
-            amount: { value: '10.00' } // Aquí puedes cambiar por el total real
+            amount: { value: '10.00' } // Cambia al total real si quieres
           }]
         });
       },
       onApprove: function(data, actions) {
-        return actions.order.capture().then(function(details) {
+        return actions.order.capture().then(async function(details) {
           alert('Gracias por tu compra, ' + details.payer.name.given_name + '!');
+
+          if (!currentUser) {
+            alert('Por favor, inicia sesión para completar la compra y recibir tu factura.');
+            return;
+          }
+
+          // Obtener token ID para backend
+          const idToken = await currentUser.getIdToken();
+
+          // Ejemplo de productos comprados (puedes enviar lo real)
+          const productos = [
+            { nombre: "Producto ejemplo", cantidad: 1, precio: 10.00 }
+          ];
+
+          // Enviar info compra al backend para guardar y enviar email con PDF
+          fetch('/api/compra', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': 'Bearer ' + idToken // si quieres validar token en backend
+            },
+            body: JSON.stringify({
+              emailCliente: currentUser.email,
+              nombreCliente: currentUser.displayName,
+              productos: productos,
+              total: 10.00
+            })
+          })
+          .then(res => res.json())
+          .then(data => {
+            console.log('Respuesta backend:', data);
+          })
+          .catch(err => {
+            console.error('Error enviando compra:', err);
+          });
+
         });
       }
     }).render('#paypal-button-container');
   </script>
 </body>
 </html>
-
