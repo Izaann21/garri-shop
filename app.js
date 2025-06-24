@@ -23,7 +23,7 @@ const transporter = nodemailer.createTransport({
   service: 'gmail',
   auth: {
     user: 'izangagon@gmail.com',         // TU CORREO
-    pass: 'AQUÍ_VA_TU_APP_PASSWORD'      // CONTRASEÑA DE APLICACIÓN, NO TU CONTRASEÑA REAL
+    pass: 'vcvd uckn zvis keti'      // CONTRASEÑA DE APLICACIÓN, NO TU CONTRASEÑA REAL
   }
 });
 
