@@ -1,33 +1,74 @@
+require('dotenv').config();
+
 const express = require('express');
 const bodyParser = require('body-parser');
 const admin = require('firebase-admin');
 const nodemailer = require('nodemailer');
 const PDFDocument = require('pdfkit');
 const path = require('path');
+const cors = require('cors');
 
-// Configura Firebase usando variable de entorno
+// Inicializa Firebase
 const serviceAccount = JSON.parse(process.env.FIREBASE_CREDENTIALS);
-
-admin.initializeApp({
-  credential: admin.credential.cert(serviceAccount),
-});
-
+admin.initializeApp({ credential: admin.credential.cert(serviceAccount) });
 const db = admin.firestore();
 
 const app = express();
+app.use(cors());
 app.use(bodyParser.json());
 app.use(express.static(path.join(__dirname, 'public')));
 
-// Configura Nodemailer (en producción deberías usar variables de entorno para el correo)
+// Configura correo (desde variables de entorno)
 const transporter = nodemailer.createTransport({
   service: 'gmail',
   auth: {
-    user: 'izangagon@gmail.com',
-    pass: 'vcvd uckn zvis keti'
+    user: process.env.EMAIL_USUARIO,
+    pass: process.env.EMAIL_CLAVE
   }
 });
 
-// GET productos
+// Función para generar PDF de factura
+const generarFacturaPDF = ({ nombreCliente, emailCliente, productos, total }) => {
+  return new Promise((resolve, reject) => {
+    const doc = new PDFDocument();
+    const buffers = [];
+
+    doc.on('data', chunk => buffers.push(chunk));
+    doc.on('end', () => resolve(Buffer.concat(buffers)));
+    doc.on('error', reject);
+
+    doc.fontSize(20).text('Factura de compra', { align: 'center' });
+    doc.moveDown();
+    doc.fontSize(14).text(`Cliente: ${nombreCliente}`);
+    doc.text(`Email: ${emailCliente}`);
+    doc.text(`Fecha: ${new Date().toLocaleString()}`);
+    doc.moveDown();
+    doc.text('Productos:');
+    productos.forEach(p => {
+      doc.text(`- ${p.nombre} x${p.cantidad} = €${(p.precio * p.cantidad).toFixed(2)}`);
+    });
+    doc.moveDown();
+    doc.fontSize(16).text(`Total: €${total.toFixed(2)}`, { align: 'right' });
+    doc.end();
+  });
+};
+
+// Envía la factura por correo
+const enviarFactura = async ({ nombreCliente, emailCliente, productos, total }) => {
+  const pdf = await generarFacturaPDF({ nombreCliente, emailCliente, productos, total });
+
+  const mailOptions = {
+    from: process.env.EMAIL_USUARIO,
+    to: emailCliente,
+    subject: `Factura de compra – ${nombreCliente}`,
+    text: `Gracias por tu compra, ${nombreCliente}. Adjuntamos tu factura.`,
+    attachments: [{ filename: 'factura.pdf', content: pdf }]
+  };
+
+  await transporter.sendMail(mailOptions);
+};
+
+// Obtiene productos desde Firebase
 app.get('/api/productos', async (req, res) => {
   try {
     const snapshot = await db.collection('productos').get();
@@ -39,9 +80,13 @@ app.get('/api/productos', async (req, res) => {
   }
 });
 
-// POST compra con factura y envío por correo
+// Registra una compra y envía la factura
 app.post('/api/compra', async (req, res) => {
   const { emailCliente, nombreCliente, productos, total } = req.body;
+
+  if (!emailCliente || !nombreCliente || !productos?.length) {
+    return res.status(400).json({ error: 'Datos incompletos del pedido' });
+  }
 
   try {
     await db.collection('pedidos').add({
@@ -53,55 +98,44 @@ app.post('/api/compra', async (req, res) => {
       estado: 'Pendiente'
     });
 
-    const generarPDF = () => {
-      return new Promise((resolve, reject) => {
-        const doc = new PDFDocument();
-        const buffers = [];
+    await enviarFactura({ emailCliente, nombreCliente, productos, total });
 
-        doc.on('data', chunk => buffers.push(chunk));
-        doc.on('end', () => resolve(Buffer.concat(buffers)));
-        doc.on('error', reject);
-
-        doc.fontSize(20).text('Factura de compra', { align: 'center' });
-        doc.moveDown();
-        doc.fontSize(14).text(`Cliente: ${nombreCliente}`);
-        doc.text(`Email: ${emailCliente}`);
-        doc.text(`Fecha: ${new Date().toLocaleString()}`);
-        doc.moveDown();
-        doc.text('Productos:');
-        productos.forEach(p => {
-          doc.text(`- ${p.nombre} x${p.cantidad} = $${(p.precio * p.cantidad).toFixed(2)}`);
-        });
-        doc.moveDown();
-        doc.fontSize(16).text(`Total: $${total.toFixed(2)}`, { align: 'right' });
-        doc.end();
-      });
-    };
-
-    const pdfData = await generarPDF();
-
-    const mailOptions = {
-      from: 'izangagon@gmail.com',
-      to: emailCliente,
-      subject: `Factura de compra - ${nombreCliente}`,
-      text: `Gracias por tu compra, ${nombreCliente}. Adjuntamos tu factura.`,
-      attachments: [{
-        filename: 'factura.pdf',
-        content: pdfData
-      }]
-    };
-
-    await transporter.sendMail(mailOptions);
-
-    res.status(200).json({ mensaje: 'Compra procesada y correo enviado' });
-
+    res.status(200).json({ mensaje: 'Compra registrada y factura enviada' });
   } catch (error) {
-    console.error('Error al procesar la compra:', error);
-    res.status(500).json({ error: 'Error al procesar compra' });
+    console.error('Error en la compra:', error);
+    res.status(500).json({ error: 'Error al procesar la compra' });
   }
 });
 
-// GET /api/pedidos - Lista todos los pedidos
+// Confirma el pago desde PayPal y guarda el pedido
+app.post('/api/verificar-pago', async (req, res) => {
+  const { emailCliente, nombreCliente, productos, total, paypalId } = req.body;
+
+  if (!paypalId || !productos?.length) {
+    return res.status(400).json({ error: 'Faltan datos del pago' });
+  }
+
+  try {
+    await db.collection('pedidos').add({
+      emailCliente,
+      nombreCliente,
+      productos,
+      total,
+      paypalId,
+      fecha: admin.firestore.FieldValue.serverTimestamp(),
+      estado: 'Confirmado'
+    });
+
+    await enviarFactura({ emailCliente, nombreCliente, productos, total });
+
+    res.status(200).json({ mensaje: 'Pago confirmado y pedido registrado' });
+  } catch (error) {
+    console.error('Error al guardar pedido tras pago:', error);
+    res.status(500).json({ error: 'Error en la confirmación del pago' });
+  }
+});
+
+// Devuelve todos los pedidos
 app.get('/api/pedidos', async (req, res) => {
   try {
     const snapshot = await db.collection('pedidos').orderBy('fecha', 'desc').get();
@@ -113,21 +147,21 @@ app.get('/api/pedidos', async (req, res) => {
   }
 });
 
-// PATCH /api/pedidos/:id - Actualiza el estado del pedido
+// Actualiza el estado de un pedido
 app.patch('/api/pedidos/:id', async (req, res) => {
   const { id } = req.params;
   const { nuevoEstado } = req.body;
 
   try {
     await db.collection('pedidos').doc(id).update({ estado: nuevoEstado });
-    res.json({ mensaje: 'Estado del pedido actualizado' });
+    res.json({ mensaje: 'Estado actualizado correctamente' });
   } catch (error) {
-    console.error('Error al actualizar estado del pedido:', error);
-    res.status(500).json({ error: 'No se pudo actualizar el estado' });
+    console.error('Error al actualizar estado:', error);
+    res.status(500).json({ error: 'No se pudo actualizar el estado del pedido' });
   }
 });
 
-// DELETE /api/pedidos/:id - Elimina un pedido
+// Elimina un pedido
 app.delete('/api/pedidos/:id', async (req, res) => {
   const { id } = req.params;
 
@@ -140,8 +174,9 @@ app.delete('/api/pedidos/:id', async (req, res) => {
   }
 });
 
-// Inicia el servidor
+// Inicia servidor
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
   console.log(`✅ Servidor corriendo en http://localhost:${PORT}`);
 });
+
